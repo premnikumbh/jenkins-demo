@@ -34,9 +34,9 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 withCredentials([string(credentialsId: 'docker-pat', variable: 'DOCKER_PAT')]) {
-                    // Using Docker PAT for login
+                    // Docker login with PAT (no need for username)
                     sh """
-                        echo \$DOCKER_PAT | docker login -u \$DOCKER_USERNAME --password-stdin
+                        echo \$DOCKER_PAT | docker login -u 'docker' --password-stdin
                         docker push ${IMAGE_NAME}
                     """
                 }
