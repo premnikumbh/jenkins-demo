@@ -77,7 +77,8 @@ pipeline {
                           -H "Authorization: token ${GITHUB_TOKEN}" \
                           -H "Content-Type: application/java-archive" \
                           --data-binary @${jarFile} \
-                          "https://uploads.github.com/repos/premnikumbh/jenkins-demo/releases/${releaseId}/assets?name=$(basename ${jarFile})"
+                          "https://uploads.github.com/repos/premnikumbh/jenkins-demo/releases/${releaseId}/assets?name=\$(basename ${jarFile})"
+
                     """
 
                     // Upload a text file with Docker image info
