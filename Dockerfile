@@ -1,7 +1,7 @@
 # Use Maven image to build the app
 FROM maven:3.8.5-openjdk-17 AS build
 WORKDIR /app
-COPY . .
+COPY . . 
 RUN mvn clean package
 
 # Use JRE image to run the app
