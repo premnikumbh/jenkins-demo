@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('docker-hub') // Jenkins credentials ID
-        GIT_CREDENTIALS = credentials('github-token') // Jenkins credentials ID
+        GIT_CREDENTIALS = credentials('github-pat') // Jenkins credentials ID
         IMAGE_NAME = 'premnikumbh/simple-java-maven-app'
     }
 
