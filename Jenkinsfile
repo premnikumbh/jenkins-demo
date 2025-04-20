@@ -26,7 +26,7 @@ pipeline {
             steps {
                 script {
                     echo "🔧 Building Docker image..."
-                    sh 'docker build -t premnikumbh/simple-java-maven-app .'
+                    sh 'docker build -t premnikumbh/jenkins-demo .'
                 }
             }
         }
@@ -45,7 +45,7 @@ pipeline {
             steps {
                 script {
                     echo "🚀 Pushing Docker image to Docker Hub..."
-                    sh 'docker push premnikumbh/simple-java-maven-app'
+                    sh 'docker push premnikumbh/jenkins-demo'
                 }
             }
         }
@@ -62,7 +62,7 @@ pipeline {
                     curl -s -X POST \
                       -H "Authorization: token ${GITHUB_TOKEN}" \
                       -H "Accept: application/vnd.github+json" \
-                      https://api.github.com/repos/premnikumbh/simple-java-maven-app/releases \
+                      https://api.github.com/repos/premnikumbh/jenkins-demo/releases \
                       -d '{
                         "tag_name": "${tagName}",
                         "name": "${releaseName}",
@@ -79,7 +79,7 @@ pipeline {
             steps {
                 script {
                     def tagName = "v" + new Date().format("yyyy.MM.dd.HHmmss")
-                    def dockerImageUrl = "premnikumbh/simple-java-maven-app:${tagName}"
+                    def dockerImageUrl = "premnikumbh/jenkins-demo:${tagName}"
                     
                     echo "📦 Creating release and uploading Docker image reference..."
 
@@ -88,7 +88,7 @@ pipeline {
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
                           -H "Accept: application/vnd.github+json" \
-                          https://api.github.com/repos/premnikumbh/simple-java-maven-app/releases \
+                          https://api.github.com/repos/premnikumbh/jenkins-demo/releases \
                           -d '{
                             "tag_name": "${tagName}",
                             "name": "Docker Image Release ${tagName}",
@@ -106,7 +106,7 @@ pipeline {
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
                           -H "Content-Type: application/json" \
-                          -d '{"name": "${dockerImageUrl}", "url": "https://hub.docker.com/r/premnikumbh/simple-java-maven-app/tags"}' \
+                          -d '{"name": "${dockerImageUrl}", "url": "https://hub.docker.com/r/premnikumbh/jenkins-demo/tags"}' \
                           "${uploadUrl}?name=docker_image_url_${tagName}.json"
                     """
                 }
@@ -126,7 +126,7 @@ pipeline {
                       -H "Authorization: token ${GITHUB_TOKEN}" \
                       -H "Content-Type: application/java-archive" \
                       --data-binary @${jarFile} \
-                      "https://uploads.github.com/repos/premnikumbh/simple-java-maven-app/releases/assets?name=${jarFile}&tag=${tagName}"
+                      "https://uploads.github.com/repos/premnikumbh/jenkins-demo/releases/assets?name=${jarFile}&tag=${tagName}"
                     """
                 }
             }
