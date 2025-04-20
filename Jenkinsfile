@@ -71,7 +71,7 @@ pipeline {
                     def jarFile = findFiles(glob: 'target/*.jar')[0].path
                     echo "📦 Uploading artifact: ${jarFile}"
 
-                    // Correctly formatted URL and file name in curl command
+                    // Fix the issue with URL string interpolation by using Groovy escape characters
                     sh """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
@@ -84,7 +84,7 @@ pipeline {
                     def imageInfoFile = "docker-image-${releaseTag}.txt"
                     writeFile file: imageInfoFile, text: "Docker Image: ${env.IMAGE_NAME}"
                     
-                    // Correctly formatted URL for the text file
+                    // Fix the issue with URL string interpolation for text file
                     sh """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
