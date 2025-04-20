@@ -5,7 +5,4 @@ services:
     build: .
     ports:
       - "8080:8080"
-    environment:
-      - SPRING_PROFILES_ACTIVE=dev
-    image: premnikumbh/simple-java-maven-app:latest
-    container_name: simple-java-maven-app
+    container_name: jenkins-demo
