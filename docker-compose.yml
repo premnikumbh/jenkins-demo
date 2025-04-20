@@ -1,0 +1,6 @@
+version: '3'
+services:
+  app:
+    image: premnikumbh/simple-java-maven-app:latest
+    ports:
+      - "8080:8080"
