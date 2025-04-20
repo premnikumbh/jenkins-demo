@@ -49,6 +49,7 @@ pipeline {
 
                     echo "🚀 Creating GitHub release: ${releaseTag}"
 
+                    // Create GitHub release
                     def createResponse = sh(script: """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
@@ -70,6 +71,7 @@ pipeline {
                     def jarFile = findFiles(glob: 'target/*.jar')[0].path
                     echo "📦 Uploading artifact: ${jarFile}"
 
+                    // Correctly formatted URL and file name in curl command
                     sh """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
@@ -82,6 +84,7 @@ pipeline {
                     def imageInfoFile = "docker-image-${releaseTag}.txt"
                     writeFile file: imageInfoFile, text: "Docker Image: ${env.IMAGE_NAME}"
                     
+                    // Correctly formatted URL for the text file
                     sh """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
