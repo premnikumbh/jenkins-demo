@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        GITHUB_TOKEN = credentials('github-pat')
-        DOCKER_CREDENTIALS = credentials('docker-hub')
+        GITHUB_TOKEN = credentials('github-pat')            // GitHub PAT for release creation
+        DOCKER_CREDENTIALS = credentials('docker-pat')      // Docker PAT credential (replace 'docker-hub' with 'docker-pat')
     }
 
     stages {
@@ -33,9 +33,12 @@ pipeline {
 
         stage('Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
-                    sh "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin"
-                    sh "docker push ${IMAGE_NAME}"
+                withCredentials([string(credentialsId: 'docker-pat', variable: 'DOCKER_PAT')]) {
+                    // Using Docker PAT for login
+                    sh """
+                        echo \$DOCKER_PAT | docker login -u \$DOCKER_USERNAME --password-stdin
+                        docker push ${IMAGE_NAME}
+                    """
                 }
             }
         }
@@ -71,21 +74,19 @@ pipeline {
                     def jarFile = findFiles(glob: 'target/*.jar')[0].path
                     echo "📦 Uploading artifact: ${jarFile}"
 
-                    // Fix the issue with URL string interpolation by using Groovy escape characters
+                    // Upload JAR file
                     sh """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
                           -H "Content-Type: application/java-archive" \
                           --data-binary @${jarFile} \
                           "https://uploads.github.com/repos/premnikumbh/jenkins-demo/releases/${releaseId}/assets?name=\$(basename ${jarFile})"
-
                     """
 
-                    // Upload a text file with Docker image info
+                    // Upload text file with Docker image info
                     def imageInfoFile = "docker-image-${releaseTag}.txt"
                     writeFile file: imageInfoFile, text: "Docker Image: ${env.IMAGE_NAME}"
                     
-                    // Fix the issue with URL string interpolation for text file
                     sh """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
