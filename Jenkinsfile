@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        GITHUB_TOKEN = credentials('github-pat')  // GitHub Token for release
-        DOCKER_CREDENTIALS = credentials('docker-hub')  // Docker Hub credentials stored in Jenkins
+        GITHUB_TOKEN = credentials('github-pat')
+        DOCKER_CREDENTIALS = credentials('docker-hub')
     }
 
     stages {
@@ -13,120 +13,81 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Build with Maven') {
+            steps {
+                echo "🔧 Building the project..."
+                sh 'mvn clean install'
+            }
+        }
+
+        stage('Build & Tag Docker Image') {
             steps {
                 script {
-                    echo "🔧 Compiling the project using Maven..."
-                    sh 'mvn clean install'
+                    env.TAG_NAME = "v" + new Date().format("yyyy.MM.dd.HHmmss")
+                    env.IMAGE_NAME = "premnikumbh/jenkins-demo:${TAG_NAME}"
+                    echo "🔧 Building Docker image with tag ${IMAGE_NAME}"
+                    sh "docker build -t ${IMAGE_NAME} ."
                 }
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Push Docker Image') {
             steps {
-                script {
-                    echo "🔧 Building Docker image..."
-                    sh 'docker build -t premnikumbh/jenkins-demo .'
+                withCredentials([usernamePassword(credentialsId: 'docker-hub', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                    sh "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin"
+                    sh "docker push ${IMAGE_NAME}"
                 }
             }
         }
 
-        stage('Login to Docker Hub') {
+        stage('Create GitHub Release & Uploads') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'docker-hub', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
-                        sh "docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD"
-                    }
-                }
-            }
-        }
+                    def releaseTag = env.TAG_NAME
+                    def releaseName = "Release ${releaseTag}"
+                    def body = "Automated release from Jenkins\n\nDocker Image: `${env.IMAGE_NAME}`"
 
-        stage('Push Docker Image to Docker Hub') {
-            steps {
-                script {
-                    echo "🚀 Pushing Docker image to Docker Hub..."
-                    sh 'docker push premnikumbh/jenkins-demo'
-                }
-            }
-        }
+                    echo "🚀 Creating GitHub release: ${releaseTag}"
 
-        stage('Create GitHub Release') {
-            steps {
-                script {
-                    echo "🚀 Creating GitHub release with tag..."
-                    def tagName = "v" + new Date().format("yyyy.MM.dd.HHmmss")
-                    def releaseName = "Jenkins Auto Release ${tagName}"
-                    def body = "Automated release from Jenkins on ${new Date()}"
-
-                    sh """
-                    curl -s -X POST \
-                      -H "Authorization: token ${GITHUB_TOKEN}" \
-                      -H "Accept: application/vnd.github+json" \
-                      https://api.github.com/repos/premnikumbh/jenkins-demo/releases \
-                      -d '{
-                        "tag_name": "${tagName}",
-                        "name": "${releaseName}",
-                        "body": "${body}",
-                        "draft": false,
-                        "prerelease": false
-                    }'
-                    """
-                }
-            }
-        }
-
-        stage('Upload Docker Image URL to GitHub Release') {
-            steps {
-                script {
-                    def tagName = "v" + new Date().format("yyyy.MM.dd.HHmmss")
-                    def dockerImageUrl = "premnikumbh/jenkins-demo:${tagName}"
-                    
-                    echo "📦 Creating release and uploading Docker image reference..."
-
-                    // Create the release
-                    def releaseResponse = sh(script: """
+                    def createResponse = sh(script: """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
                           -H "Accept: application/vnd.github+json" \
                           https://api.github.com/repos/premnikumbh/jenkins-demo/releases \
                           -d '{
-                            "tag_name": "${tagName}",
-                            "name": "Docker Image Release ${tagName}",
-                            "body": "Automated release for Docker image: ${dockerImageUrl}",
+                            "tag_name": "${releaseTag}",
+                            "name": "${releaseName}",
+                            "body": "${body}",
                             "draft": false,
                             "prerelease": false
-                        }'
+                          }'
                     """, returnStdout: true).trim()
 
-                    // Get the upload URL for the release
-                    def uploadUrl = readJSON(text: releaseResponse).upload_url.split("{")[0]
+                    def releaseJson = readJSON text: createResponse
+                    def releaseId = releaseJson.id
 
-                    // Upload the Docker image reference URL
-                    sh """
-                        curl -s -X POST \
-                          -H "Authorization: token ${GITHUB_TOKEN}" \
-                          -H "Content-Type: application/json" \
-                          -d '{"name": "${dockerImageUrl}", "url": "https://hub.docker.com/r/premnikumbh/jenkins-demo/tags"}' \
-                          "${uploadUrl}?name=docker_image_url_${tagName}.json"
-                    """
-                }
-            }
-        }
-
-        stage('Upload Artifact to GitHub Release') {
-            steps {
-                script {
-                    def tagName = "v" + new Date().format("yyyy.MM.dd.HHmmss")
+                    // Upload the JAR artifact
                     def jarFile = findFiles(glob: 'target/*.jar')[0].path
-
                     echo "📦 Uploading artifact: ${jarFile}"
 
                     sh """
-                    curl -s -X POST \
-                      -H "Authorization: token ${GITHUB_TOKEN}" \
-                      -H "Content-Type: application/java-archive" \
-                      --data-binary @${jarFile} \
-                      "https://uploads.github.com/repos/premnikumbh/jenkins-demo/releases/assets?name=${jarFile}&tag=${tagName}"
+                        curl -s -X POST \
+                          -H "Authorization: token ${GITHUB_TOKEN}" \
+                          -H "Content-Type: application/java-archive" \
+                          --data-binary @${jarFile} \
+                          "https://uploads.github.com/repos/premnikumbh/jenkins-demo/releases/${releaseId}/assets?name=$(basename ${jarFile})"
+                    """
+
+                    // Upload a text file with Docker image info
+                    def imageInfoFile = "docker-image-${releaseTag}.txt"
+                    writeFile file: imageInfoFile, text: "Docker Image: ${env.IMAGE_NAME}"
+                    
+                    sh """
+                        curl -s -X POST \
+                          -H "Authorization: token ${GITHUB_TOKEN}" \
+                          -H "Content-Type: text/plain" \
+                          --data-binary @${imageInfoFile} \
+                          "https://uploads.github.com/repos/premnikumbh/jenkins-demo/releases/${releaseId}/assets?name=${imageInfoFile}"
                     """
                 }
             }
