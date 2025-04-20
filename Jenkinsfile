@@ -2,64 +2,95 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('docker-hub') // Jenkins credentials ID
-        GIT_CREDENTIALS = credentials('github-pat') // Jenkins credentials ID
-        IMAGE_NAME = 'premnikumbh/simple-java-maven-app'
+        GITHUB_TOKEN = credentials('github-token')  // GitHub Token for release
     }
 
     stages {
-        stage('Clone Code') {
+        stage('Checkout') {
             steps {
-                git url: 'https://github.com/premnikumbh/simple-java-maven-app.git', branch: 'main'
+                checkout scm
             }
         }
 
-        stage('Build with Maven') {
+        stage('Build') {
             steps {
-                sh 'mvn clean package'
+                script {
+                    echo "🔧 Compiling the project using Maven..."
+                    sh 'mvn clean install'
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    def version = sh(script: "date +%Y%m%d%H%M%S", returnStdout: true).trim()
-                    env.IMAGE_TAG = "${version}"
+                    echo "🔧 Building Docker image..."
+                    sh 'docker build -t premnikumbh/simple-java-maven-app .'
                 }
-                sh """
-                docker build -t $IMAGE_NAME:$IMAGE_TAG .
-                docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:latest
-                """
             }
         }
 
-        stage('Push Docker Image to Docker Hub') {
+        stage('Login to Docker') {
             steps {
-                withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                        sh "docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD"
+                    }
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    echo "🚀 Pushing Docker image to Docker Hub..."
+                    sh 'docker push premnikumbh/simple-java-maven-app'
+                }
+            }
+        }
+
+        stage('Create GitHub Release') {
+            steps {
+                script {
+                    echo "🚀 Creating GitHub release with tag..."
+                    def tagName = "v" + new Date().format("yyyy.MM.dd.HHmmss")
+                    def releaseName = "Jenkins Auto Release ${tagName}"
+                    def body = "Automated release from Jenkins on ${new Date()}"
+
                     sh """
-                    docker push $IMAGE_NAME:$IMAGE_TAG
-                    docker push $IMAGE_NAME:latest
+                    curl -s -X POST \
+                      -H "Authorization: token ${GITHUB_TOKEN}" \
+                      -H "Accept: application/vnd.github+json" \
+                      https://api.github.com/repos/premnikumbh/simple-java-maven-app/releases \
+                      -d '{
+                        "tag_name": "${tagName}",
+                        "name": "${releaseName}",
+                        "body": "${body}",
+                        "draft": false,
+                        "prerelease": false
+                    }'
                     """
                 }
             }
         }
 
-        stage('Deploy using Docker Compose') {
+        stage('Upload Artifact to Release') {
             steps {
-                sh """
-                docker-compose down || true
-                docker-compose up -d
-                """
-            }
-        }
-    }
+                script {
+                    def tagName = "v" + new Date().format("yyyy.MM.dd.HHmmss")
+                    def jarFile = findFiles(glob: 'target/*.jar')[0].path
 
-    post {
-        failure {
-            echo 'Build failed!'
-        }
-        success {
-            echo "Build succeeded! Deployed version: $IMAGE_TAG"
+                    echo "📦 Uploading artifact: ${jarFile}"
+
+                    sh """
+                    curl -s -X POST \
+                      -H "Authorization: token ${GITHUB_TOKEN}" \
+                      -H "Content-Type: application/java-archive" \
+                      --data-binary @${jarFile} \
+                      "https://uploads.github.com/repos/premnikumbh/simple-java-maven-app/releases/assets?name=${jarFile}&tag=${tagName}"
+                    """
+                }
+            }
         }
     }
 }
