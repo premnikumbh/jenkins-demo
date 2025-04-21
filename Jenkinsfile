@@ -45,12 +45,12 @@ pipeline {
         stage('Tag Git Commit') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'github-pat', variable: 'GITHUB_PAT')]) {
                         sh """
                             git config user.name "premnikumbh"
                             git config user.email "premnikumbh@users.noreply.github.com"
                             git tag ${TAG_NAME}
-                            git remote set-url origin https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/premnikumbh/jenkins-demo.git
+                            git remote set-url origin https://premnikumbh:${GITHUB_PAT}@github.com/premnikumbh/jenkins-demo.git
                             git push origin ${TAG_NAME}
                         """
                     }
@@ -84,24 +84,22 @@ pipeline {
 
                     echo "📨 GitHub API raw response:\n${createResponse}"
 
-                    // Try parsing with readJSON first, fallback to jq if it fails
                     def releaseId = ''
                     try {
                         def releaseJson = readJSON text: createResponse
                         releaseId = releaseJson.id
                     } catch (Exception e) {
                         echo "⚠️ readJSON failed: ${e.getMessage()}"
-                        echo "⛑️ Falling back to jq"
+                        echo "⛑️ Falling back to jq..."
                         releaseId = sh(script: """echo '${createResponse}' | jq '.id'""", returnStdout: true).trim()
                     }
 
-                    if (!releaseId) {
-                        error("❌ Failed to parse release ID. Exiting.")
+                    if (!releaseId || releaseId == "null") {
+                        error("❌ Failed to parse release ID. Response was:\n${createResponse}")
                     }
 
                     echo "✅ GitHub Release ID: ${releaseId}"
 
-                    // Upload JAR file
                     def jarFile = findFiles(glob: 'target/*.jar')[0].path
                     echo "📦 Uploading artifact: ${jarFile}"
 
@@ -113,7 +111,6 @@ pipeline {
                           "https://uploads.github.com/repos/premnikumbh/jenkins-demo/releases/${releaseId}/assets?name=\$(basename ${jarFile})"
                     """
 
-                    // Upload Docker image info file
                     def imageInfoFile = "docker-image-${releaseTag}.txt"
                     writeFile file: imageInfoFile, text: "Docker Image: ${env.IMAGE_NAME}"
                     
