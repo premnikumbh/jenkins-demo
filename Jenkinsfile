@@ -45,12 +45,15 @@ pipeline {
         stage('Tag Git Commit') {
             steps {
                 script {
-                    sh """
-                        git config user.name "Jenkins CI"
-                        git config user.email "ci@jenkins.local"
-                        git tag ${TAG_NAME}
-                        git push origin ${TAG_NAME}
-                    """
+                    withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            git config user.name "Jenkins CI"
+                            git config user.email "ci@jenkins.local"
+                            git tag ${TAG_NAME}
+                            git remote set-url origin https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/premnikumbh/jenkins-demo.git
+                            git push origin ${TAG_NAME}
+                        """
+                    }
                     echo "🏷️ Git tag ${TAG_NAME} created and pushed."
                 }
             }
@@ -61,7 +64,7 @@ pipeline {
                 script {
                     def releaseTag = env.TAG_NAME
                     def releaseName = "Release ${releaseTag}"
-                    def body = "🤖 Automated release from Jenkins\n\n🐳 Docker Image: `${env.IMAGE_NAME}`"
+                    def body = "🤖 Automated release from Jenkins\n\n🐳 Docker Image: ${env.IMAGE_NAME}"
 
                     echo "🚀 Creating GitHub release for tag: ${releaseTag}"
 
