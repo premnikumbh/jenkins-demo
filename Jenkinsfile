@@ -36,7 +36,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'docker-pat', variable: 'DOCKER_PAT')]) {
                     // Docker login with PAT (no need for username)
                     sh """
-                        echo \$DOCKER_PAT | docker login -u 'docker' --password-stdin
+                        echo \$DOCKER_PAT | docker login -u 'premnikumbh' --password-stdin
                         docker push ${IMAGE_NAME}
                     """
                 }
