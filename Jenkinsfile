@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        GITHUB_TOKEN = credentials('github-pat')            // GitHub PAT for release creation
-        DOCKER_CREDENTIALS = credentials('docker-pat')      // Docker PAT credential (replace 'docker-hub' with 'docker-pat')
+        GITHUB_TOKEN = credentials('github-pat')            // GitHub PAT with correct scopes
+        DOCKER_CREDENTIALS = credentials('docker-pat')      // Docker PAT credential
     }
 
     stages {
@@ -25,7 +25,7 @@ pipeline {
                 script {
                     env.TAG_NAME = "v" + new Date().format("yyyy.MM.dd.HHmmss")
                     env.IMAGE_NAME = "premnikumbh/jenkins-demo:${TAG_NAME}"
-                    echo "🔧 Building Docker image with tag ${IMAGE_NAME}"
+                    echo "🐳 Building Docker image with tag ${IMAGE_NAME}"
                     sh "docker build -t ${IMAGE_NAME} ."
                 }
             }
@@ -34,11 +34,24 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 withCredentials([string(credentialsId: 'docker-pat', variable: 'DOCKER_PAT')]) {
-                    // Docker login with PAT (no need for username)
                     sh """
                         echo \$DOCKER_PAT | docker login -u 'premnikumbh' --password-stdin
                         docker push ${IMAGE_NAME}
                     """
+                }
+            }
+        }
+
+        stage('Tag Git Commit') {
+            steps {
+                script {
+                    sh """
+                        git config user.name "Jenkins CI"
+                        git config user.email "ci@jenkins.local"
+                        git tag ${TAG_NAME}
+                        git push origin ${TAG_NAME}
+                    """
+                    echo "🏷️ Git tag ${TAG_NAME} created and pushed."
                 }
             }
         }
@@ -48,11 +61,10 @@ pipeline {
                 script {
                     def releaseTag = env.TAG_NAME
                     def releaseName = "Release ${releaseTag}"
-                    def body = "Automated release from Jenkins\n\nDocker Image: `${env.IMAGE_NAME}`"
+                    def body = "🤖 Automated release from Jenkins\n\n🐳 Docker Image: `${env.IMAGE_NAME}`"
 
-                    echo "🚀 Creating GitHub release: ${releaseTag}"
+                    echo "🚀 Creating GitHub release for tag: ${releaseTag}"
 
-                    // Create GitHub release
                     def createResponse = sh(script: """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
@@ -67,14 +79,29 @@ pipeline {
                           }'
                     """, returnStdout: true).trim()
 
-                    def releaseJson = readJSON text: createResponse
-                    def releaseId = releaseJson.id
+                    echo "📨 GitHub API raw response:\n${createResponse}"
 
-                    // Upload the JAR artifact
+                    // Try parsing with readJSON first, fallback to jq if it fails
+                    def releaseId = ''
+                    try {
+                        def releaseJson = readJSON text: createResponse
+                        releaseId = releaseJson.id
+                    } catch (Exception e) {
+                        echo "⚠️ readJSON failed: ${e.getMessage()}"
+                        echo "⛑️ Falling back to jq"
+                        releaseId = sh(script: """echo '${createResponse}' | jq '.id'""", returnStdout: true).trim()
+                    }
+
+                    if (!releaseId) {
+                        error("❌ Failed to parse release ID. Exiting.")
+                    }
+
+                    echo "✅ GitHub Release ID: ${releaseId}"
+
+                    // Upload JAR file
                     def jarFile = findFiles(glob: 'target/*.jar')[0].path
                     echo "📦 Uploading artifact: ${jarFile}"
 
-                    // Upload JAR file
                     sh """
                         curl -s -X POST \
                           -H "Authorization: token ${GITHUB_TOKEN}" \
@@ -83,7 +110,7 @@ pipeline {
                           "https://uploads.github.com/repos/premnikumbh/jenkins-demo/releases/${releaseId}/assets?name=\$(basename ${jarFile})"
                     """
 
-                    // Upload text file with Docker image info
+                    // Upload Docker image info file
                     def imageInfoFile = "docker-image-${releaseTag}.txt"
                     writeFile file: imageInfoFile, text: "Docker Image: ${env.IMAGE_NAME}"
                     
