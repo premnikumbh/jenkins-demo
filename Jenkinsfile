@@ -47,8 +47,8 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GITHUB_USERNAME', passwordVariable: 'GITHUB_TOKEN')]) {
                         sh """
-                            git config user.name "Jenkins CI"
-                            git config user.email "ci@jenkins.local"
+                            git config user.name "premnikumbh"
+                            git config user.email "premnikumbh@users.noreply.github.com"
                             git tag ${TAG_NAME}
                             git remote set-url origin https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/premnikumbh/jenkins-demo.git
                             git push origin ${TAG_NAME}
