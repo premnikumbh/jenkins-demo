@@ -95,7 +95,7 @@ pipeline {
                             releaseId = sh(script: """echo '${createResponse}' | jq '.id'""", returnStdout: true).trim()
                         }
 
-                        if (!releaseId?.isNumber()) {
+                        if (!releaseId || !(releaseId.toString() ==~ /^\d+$/)) {
                             error("❌ Failed to parse release ID. Raw response was:\n${createResponse}")
                         }
 
